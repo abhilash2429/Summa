@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summarize</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #f1f3f5;
+            --accent: #495057;
+            --accent-hover: #343a40;
+            --accent-light: #e9ecef;
+            --text-primary: #212529;
+            --text-secondary: #495057;
+            --text-muted: #868e96;
+            --border: #dee2e6;
+            --border-light: #e9ecef;
+            --highlight-bg: #fff3bf;
+            --highlight-text: #212529;
+            --user-bubble: #f1f3f5;
+            --ai-bubble: #ffffff;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+            flex-shrink: 0;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .header-title svg {
+            width: 18px;
+            height: 18px;
+            color: var(--accent);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .icon-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 10px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: left;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
+        }
+
+        .action-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .action-btn span {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .action-btn.active span {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Control Bar */
+        .control-bar {
+            display: flex;
+            gap: 16px;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .control-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .control-options {
+            display: flex;
+            gap: 4px;
+        }
+
+        .control-btn {
+            padding: 6px 10px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .control-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .control-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .font-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .content-area::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .content-area::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        .content-area::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .content-area::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            max-width: 280px;
+            line-height: 1.5;
+        }
+
+        /* Summary Section */
+        .summary-section {
+            display: none;
+        }
+
+        .summary-section.visible {
+            display: block;
+        }
+
+        .summary-heading {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .summary-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .summary-body {
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        .summary-body p {
+            margin-bottom: 12px;
+        }
+
+        .summary-body .highlight {
+            background: var(--highlight-bg);
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-weight: 500;
+        }
+
+        .summary-body strong {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Follow-up Section */
+        .followup-section {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .followup-item {
+            margin-bottom: 16px;
+        }
+
+        .followup-question {
+            background: var(--user-bubble);
+            border-radius: 12px 12px 12px 4px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-primary);
+            display: inline-block;
+            max-width: 90%;
+        }
+
+        .followup-answer {
+            background: var(--ai-bubble);
+            border: 1px solid var(--border);
+            border-radius: 12px 12px 4px 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .followup-answer .highlight {
+            background: var(--highlight-bg);
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-weight: 500;
+        }
+
+        /* Jump to Latest */
+        .jump-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            padding: 8px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: all 0.15s;
+            display: none;
+            z-index: 100;
+        }
+
+        .jump-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .jump-btn.visible {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Input Section */
+        .input-section {
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border);
+            padding: 16px 20px;
+            flex-shrink: 0;
+        }
+
+        .followup-counter {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-align: right;
+        }
+
+        .followup-counter.warning {
+            color: #e67700;
+        }
+
+        .followup-counter.limit {
+            color: #c92a2a;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        textarea {
+            flex: 1;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            resize: none;
+            height: 44px;
+            max-height: 120px;
+            transition: all 0.15s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        textarea:disabled {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .send-btn {
+            width: 44px;
+            height: 44px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Loading State */
+        .loading-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .loading-indicator.visible {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* URL Input Modal */
+        .url-input-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .url-input-overlay.visible {
+            display: flex;
+        }
+
+        .url-input-modal {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 24px var(--shadow);
+        }
+
+        .url-input-modal h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .url-input-modal input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .url-input-modal input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .modal-btn.secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .modal-btn.primary {
+            background: var(--accent);
+            border: 1px solid var(--accent);
+            color: white;
+        }
+
+        .modal-btn.primary:hover {
+            background: var(--accent-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div class="header-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 6h16M4 12h16M4 18h10" />
+                    </svg>
+                    Summarize
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="clearBtn" title="Clear">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14" />
+                        </svg>
+                    </button>
+                    <button class="icon-btn" id="exportBtn" title="Export">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="action-btn" id="btnPage" data-action="page">
+                    📄 Current Page
+                    <span>Summarize this tab</span>
+                </button>
+                <button class="action-btn" id="btnUrl" data-action="url">
+                    🔗 Enter URL
+                    <span>Paste any link</span>
+                </button>
+                <button class="action-btn" id="btnYoutube" data-action="youtube">
+                    ▶️ YouTube Video
+                    <span>Video transcript</span>
+                </button>
+                <button class="action-btn" id="btnText" data-action="text">
+                    ✏️ Custom Text
+                    <span>Paste your text</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="control-bar">
+            <div class="control-group">
+                <span class="control-label">Length</span>
+                <div class="control-options">
+                    <button class="control-btn" data-length="S">S</button>
+                    <button class="control-btn active" data-length="M">M</button>
+                    <button class="control-btn" data-length="L">L</button>
+                    <button class="control-btn" data-length="XL">XL</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <span class="control-label">Font Size</span>
+                <div class="control-options">
+                    <button class="control-btn font-btn" id="fontDecrease">A-</button>
+                    <button class="control-btn font-btn" id="fontIncrease">A+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-area" id="contentArea">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-state-icon">📝</div>
+                <h2>Ready to Summarize</h2>
+                <p>Select an action above to summarize a page, URL, YouTube video, or paste your own text.</p>
+            </div>
+
+            <div class="summary-section" id="summarySection">
+                <h1 class="summary-heading" id="summaryHeading"></h1>
+                <div class="summary-meta" id="summaryMeta"></div>
+                <div class="summary-body" id="summaryBody"></div>
+
+                <div class="followup-section" id="followupSection"></div>
+            </div>
+
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+                <span>Generating summary...</span>
+            </div>
+        </div>
+
+        <button class="jump-btn" id="jumpBtn">
+            ↓ Jump to latest
+        </button>
+
+        <div class="input-section">
+            <div class="followup-counter" id="followUpCounter"></div>
+            <div class="input-wrapper">
+                <textarea id="userInput" placeholder="Ask about this summary..." rows="1"></textarea>
+                <button class="send-btn" id="sendBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL Input Modal -->
+    <div class="url-input-overlay" id="urlOverlay">
+        <div class="url-input-modal">
+            <h3>Enter URL to Summarize</h3>
+            <input type="url" id="urlInput" placeholder="https://example.com/article">
+            <div class="modal-actions">
+                <button class="modal-btn secondary" id="urlCancel">Cancel</button>
+                <button class="modal-btn primary" id="urlSubmit">Summarize</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+
+</html>

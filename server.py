@@ -3,7 +3,10 @@ import hashlib
 import requests
 import re
 import json
+import time
 from flask import Flask, request, jsonify
+from urllib.parse import urlparse
+from datetime import datetime
 from flask_cors import CORS
 from bs4 import BeautifulSoup
 import yt_dlp
@@ -25,35 +28,38 @@ print("Gemini API configured (gemini-flash-latest)")
 app = Flask(__name__)
 CORS(app)
 
-# ─── Summarization Prompt ────────────────────────────────────
+# ─── Summarization Prompts by Length ─────────────────────────
+LENGTH_INSTRUCTIONS = {
+    'S': 'Be extremely concise. Maximum 2-3 sentences total. Only the absolute core insight.',
+    'M': 'Be concise but complete. 1 short paragraph (4-6 sentences). Cover main points briefly.',
+    'L': 'Be thorough. 2-3 paragraphs. Include key details and supporting points.',
+    'XL': 'Be comprehensive. 4-5 paragraphs. Include context, details, examples, and nuances.'
+}
+
 SYSTEM_PROMPT = """You are a summarization engine. Not a chatbot.
 Output ONLY in this exact JSON format, no deviations:
 
 {
-  "title": "[inferred title, max 10 words]",
-  "takeaway": "[single sentence, core insight]",
-  "key_points": ["point 1", "point 2", "point 3"],
-  "details": "[1-2 paragraphs expanding on key points]",
-  "actionable": ["insight 1", "insight 2"] or [],
-  "limitations": "[notes on bias/limitations]" or ""
+  "heading": "[compelling title, max 8 words, captures the essence]",
+  "summary": "[main summary text with **bold** for key terms]",
+  "highlights": ["keyword1", "keyword2", "keyword3"]
 }
 
 Rules:
 - Output ONLY valid JSON, nothing else
+- Use **double asterisks** to bold important terms in the summary
+- highlights array: 3-7 key terms that are most important
+- heading: should be engaging and descriptive, not generic
 - No meta commentary, disclaimers, or source references
-- Prioritize claims and concepts over examples
 - Compress aggressively without hallucinating
-- 3-6 key points maximum
-- If no actionable insights, use empty array []
-- If no limitations, use empty string ""
 """
 
 # ─── Caching layer ───────────────────────────────────────────
 _summary_cache = {}
 
-def gemini_summarize(text):
+def gemini_summarize(text, length='M'):
     """Call Gemini API to generate structured summary."""
-    cache_key = hashlib.md5(text.encode()).hexdigest()
+    cache_key = hashlib.md5((text + length).encode()).hexdigest()
     if cache_key in _summary_cache:
         return _summary_cache[cache_key]
     
@@ -61,7 +67,8 @@ def gemini_summarize(text):
     if len(text) > 30000:
         text = text[:30000] + "..."
     
-    prompt = f"{SYSTEM_PROMPT}\n\nContent to summarize:\n{text}"
+    length_instruction = LENGTH_INSTRUCTIONS.get(length, LENGTH_INSTRUCTIONS['M'])
+    prompt = f"{SYSTEM_PROMPT}\n\nLength instruction: {length_instruction}\n\nContent to summarize:\n{text}"
     
     try:
         response = model.generate_content(prompt)
@@ -80,17 +87,33 @@ def gemini_summarize(text):
         
         return summary_data
     except json.JSONDecodeError:
-        # Fallback: return raw text as details
+        # Fallback: return raw text as summary
         return {
-            "title": "Summary",
-            "takeaway": "See details below.",
-            "key_points": [],
-            "details": raw_text,
-            "actionable": [],
-            "limitations": ""
+            "heading": "Summary",
+            "summary": raw_text,
+            "highlights": []
         }
     except Exception as e:
         raise Exception(f"Gemini API error: {str(e)}")
+
+def format_summary_response(data):
+    """Format the structured data into API response."""
+    return {
+        'heading': data.get('heading', 'Summary'),
+        'summary': data.get('summary', ''),
+        'highlights': data.get('highlights', [])
+    }
+
+def generate_citation(url, summary_text):
+    """Generate MLA-style citation."""
+    try:
+        domain = urlparse(url).netloc
+        date = datetime.now().strftime("%d %b. %Y")
+        snippet = summary_text.replace('\n', ' ')[:50] + "..."
+        return f'"{snippet}" {domain}, {date}. Web.'
+    except:
+        return ""
+
 
 # ─── Web page text extraction ────────────────────────────────
 def fetch_url_text(url):
@@ -190,11 +213,24 @@ def fetch_youtube_transcript(url):
 def summarize_text():
     data = request.get_json()
     text = data.get('text', '')
+    length = data.get('length', 'M')
+    
     if not text or len(text.strip()) < 20:
         return jsonify({'error': 'Text must be at least 20 characters'}), 400
     try:
-        summary = gemini_summarize(text)
-        return jsonify(summary)
+        structured_data = gemini_summarize(text, length)
+        response = format_summary_response(structured_data)
+        
+        return jsonify({
+            **response,
+            'metadata': {
+                'input_length': len(text),
+                'word_count': len(text.split()),
+                'length': length,
+                'timestamp': time.time(),
+                'model': 'gemini-flash-latest'
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -202,12 +238,26 @@ def summarize_text():
 def summarize_url():
     data = request.get_json()
     url = data.get('url', '')
+    length = data.get('length', 'M')
+    
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
     try:
         text = fetch_url_text(url)
-        summary = gemini_summarize(text)
-        return jsonify(summary)
+        structured_data = gemini_summarize(text, length)
+        response = format_summary_response(structured_data)
+        citation = generate_citation(url, response.get('summary', ''))
+        
+        return jsonify({
+            **response,
+            'citation': citation,
+            'metadata': {
+                'source': url,
+                'length': length,
+                'timestamp': time.time(),
+                'model': 'gemini-flash-latest'
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -215,12 +265,62 @@ def summarize_url():
 def summarize_youtube():
     data = request.get_json()
     url = data.get('url', '')
+    length = data.get('length', 'M')
+    
     if not url or ('youtube.com' not in url and 'youtu.be' not in url):
         return jsonify({'error': 'Invalid YouTube URL'}), 400
     try:
         transcript = fetch_youtube_transcript(url)
-        summary = gemini_summarize(transcript)
-        return jsonify(summary)
+        structured_data = gemini_summarize(transcript, length)
+        response = format_summary_response(structured_data)
+        citation = generate_citation(url, response.get('summary', ''))
+        
+        return jsonify({
+            **response,
+            'citation': citation,
+            'metadata': {
+                'source': 'YouTube',
+                'video_url': url,
+                'length': length,
+                'timestamp': time.time(),
+                'model': 'gemini-flash-latest'
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/follow-up', methods=['POST'])
+def follow_up_question():
+    data = request.get_json()
+    question = data.get('question', '')
+    context = data.get('context', '')
+    history = data.get('history', [])
+    
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
+    
+    if not context:
+        return jsonify({'error': 'No context available. Summarize something first.'}), 400
+    
+    try:
+        prompt = f"""You are a helpful assistant answering follow-up questions about a summary.
+
+Original Summary:
+{context}
+
+Conversation History:
+"""
+        for msg in history[-4:]:
+            role_label = "User" if msg['role'] == 'user' else "Assistant"
+            prompt += f"{role_label}: {msg['content']}\n"
+        
+        prompt += f"\nUser: {question}\nAssistant:"
+        
+        response = model.generate_content(prompt)
+        answer = response.text
+        
+        return jsonify({'answer': answer})
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
