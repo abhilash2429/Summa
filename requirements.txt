@@ -6,3 +6,5 @@ yt-dlp
 google-generativeai
 python-dotenv
 gunicorn
+openai-whisper
+torch
