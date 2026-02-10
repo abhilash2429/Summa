@@ -1,24 +1,22 @@
 // ═══════════════════════════════════════════════════════════
-// Configuration
+// Main Application Logic
 // ═══════════════════════════════════════════════════════════
 
 const API_BASE = 'http://127.0.0.1:5000';
 const MAX_FOLLOW_UPS = 3;
-const STORAGE_KEY = 'summarizer_state';
 
 // ═══════════════════════════════════════════════════════════
-// State
+// State Management
 // ═══════════════════════════════════════════════════════════
 
-let state = {
-    currentAction: null, // 'page', 'url', 'youtube', 'text'
-    length: 'M',
-    fontSize: 16,
+let appState = {
+    currentSource: 'current-tab',
+    messages: [],
     followUpCount: 0,
-    summary: null,
-    heading: null,
-    context: null,
-    followUps: []
+    currentContext: null,
+    isProcessing: false,
+    dropdownOpen: false,
+    settingsOpen: false
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -26,76 +24,455 @@ let state = {
 // ═══════════════════════════════════════════════════════════
 
 const elements = {
-    // Actions
-    btnPage: document.getElementById('btnPage'),
-    btnUrl: document.getElementById('btnUrl'),
-    btnYoutube: document.getElementById('btnYoutube'),
-    btnText: document.getElementById('btnText'),
+    // Header controls
+    summarizeBtn: document.getElementById('summarizeBtn'),
+    sourceDropdown: document.getElementById('sourceDropdown'),
+    settingsBtn: document.getElementById('settingsBtn'),
+    settingsPanel: document.getElementById('settingsPanel'),
 
-    // Controls
-    clearBtn: document.getElementById('clearBtn'),
-    exportBtn: document.getElementById('exportBtn'),
-    fontDecrease: document.getElementById('fontDecrease'),
-    fontIncrease: document.getElementById('fontIncrease'),
+    // Input controls
+    dynamicInputArea: document.getElementById('dynamicInputArea'),
+    customUrl: document.getElementById('customUrl'),
+    customText: document.getElementById('customText'),
 
-    // Content
+    // Content areas
     contentArea: document.getElementById('contentArea'),
-    emptyState: document.getElementById('emptyState'),
-    summarySection: document.getElementById('summarySection'),
-    summaryHeading: document.getElementById('summaryHeading'),
-    summaryMeta: document.getElementById('summaryMeta'),
-    summaryBody: document.getElementById('summaryBody'),
-    followupSection: document.getElementById('followupSection'),
-    loadingIndicator: document.getElementById('loadingIndicator'),
+    homePage: document.getElementById('homePage'),
 
-    // Input
-    userInput: document.getElementById('userInput'),
-    sendBtn: document.getElementById('sendBtn'),
-    followUpCounter: document.getElementById('followUpCounter'),
-    jumpBtn: document.getElementById('jumpBtn'),
+    // Follow-up
+    followupInput: document.getElementById('followupInput'),
+    followupSendBtn: document.getElementById('followupSendBtn'),
+    followupCounter: document.getElementById('followupCounter'),
 
-    // URL Modal
-    urlOverlay: document.getElementById('urlOverlay'),
-    urlInput: document.getElementById('urlInput'),
-    urlCancel: document.getElementById('urlCancel'),
-    urlSubmit: document.getElementById('urlSubmit')
+    // Settings
+    colorSelect: document.getElementById('colorSelect')
 };
 
 // ═══════════════════════════════════════════════════════════
-// Persistence
+// Initialization
 // ═══════════════════════════════════════════════════════════
 
-async function saveState() {
-    await chrome.storage.local.set({ [STORAGE_KEY]: state });
+async function init() {
+    // Load and apply settings
+    await settingsManager.load();
+    settingsManager.apply();
+
+    // Initialize settings UI
+    initializeSettingsUI();
+
+    // Set up event listeners
+    setupEventListeners();
+
+    // Update follow-up counter
+    updateFollowUpCounter();
+
+    console.log('Sum-it-up initialized');
 }
 
-async function loadState() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    if (result[STORAGE_KEY]) {
-        state = { ...state, ...result[STORAGE_KEY] };
-        restoreUI();
+// ═══════════════════════════════════════════════════════════
+// Settings UI Initialization
+// ═══════════════════════════════════════════════════════════
+
+function initializeSettingsUI() {
+    const settings = settingsManager.settings;
+
+    // Set color select value
+    if (elements.colorSelect) {
+        elements.colorSelect.value = settings.colorPalette;
+    }
+
+    // Highlight active toggle buttons
+    document.querySelectorAll('.toggle-group').forEach(group => {
+        const setting = group.dataset.setting;
+        const value = settings[setting];
+
+        group.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.value === value);
+        });
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Event Listeners
+// ═══════════════════════════════════════════════════════════
+
+function setupEventListeners() {
+    // Summarize button - toggle dropdown or summarize
+    elements.summarizeBtn.addEventListener('click', handleSummarizeClick);
+
+    // Source options in dropdown
+    document.querySelectorAll('.source-option').forEach(option => {
+        option.addEventListener('click', handleSourceSelect);
+    });
+
+    // Settings panel toggle
+    elements.settingsBtn.addEventListener('click', toggleSettings);
+
+    // Color select change
+    if (elements.colorSelect) {
+        elements.colorSelect.addEventListener('change', handleColorChange);
+    }
+
+    // Toggle buttons in settings
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.addEventListener('click', handleToggleChange);
+    });
+
+    // Follow-up input
+    elements.followupSendBtn.addEventListener('click', handleFollowUp);
+    elements.followupInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleFollowUp();
+        }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.summarize-dropdown-wrapper')) {
+            closeDropdown();
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Dropdown Handling
+// ═══════════════════════════════════════════════════════════
+
+function handleSummarizeClick(e) {
+    e.stopPropagation();
+
+    if (appState.dropdownOpen) {
+        closeDropdown();
+        performSummarize();
+    } else {
+        toggleDropdown();
     }
 }
 
-function restoreUI() {
-    // Restore length selection
-    document.querySelectorAll('[data-length]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.length === state.length);
+function toggleDropdown() {
+    appState.dropdownOpen = !appState.dropdownOpen;
+    elements.sourceDropdown.classList.toggle('hidden', !appState.dropdownOpen);
+    elements.summarizeBtn.classList.toggle('dropdown-open', appState.dropdownOpen);
+}
+
+function closeDropdown() {
+    appState.dropdownOpen = false;
+    elements.sourceDropdown.classList.add('hidden');
+    elements.summarizeBtn.classList.remove('dropdown-open');
+}
+
+function handleSourceSelect(e) {
+    const source = e.currentTarget.dataset.source;
+
+    // Update active state
+    document.querySelectorAll('.source-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.source === source);
     });
 
-    // Restore font size
-    elements.summaryBody.style.fontSize = state.fontSize + 'px';
+    appState.currentSource = source;
+    updateDynamicInputArea();
+    closeDropdown();
+}
 
-    // Restore summary if exists
-    if (state.summary) {
-        showSummary(state.heading, state.summary, false);
+function updateDynamicInputArea() {
+    const source = appState.currentSource;
+    const needsInput = source === 'custom-url' || source === 'custom-script';
 
-        // Restore follow-ups
-        state.followUps.forEach(fu => {
-            addFollowUpToUI(fu.question, fu.answer);
+    // Show/hide dynamic input area
+    elements.dynamicInputArea.classList.toggle('hidden', !needsInput);
+
+    // Show/hide specific input modes
+    document.querySelectorAll('.input-mode').forEach(mode => {
+        mode.classList.toggle('hidden', mode.dataset.mode !== source);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Settings Panel
+// ═══════════════════════════════════════════════════════════
+
+function toggleSettings() {
+    appState.settingsOpen = !appState.settingsOpen;
+    elements.settingsPanel.classList.toggle('hidden', !appState.settingsOpen);
+}
+
+async function handleColorChange(e) {
+    const value = e.target.value;
+    await settingsManager.set('colorPalette', value);
+    settingsManager.apply();
+}
+
+async function handleToggleChange(e) {
+    const btn = e.currentTarget;
+    const group = btn.closest('.toggle-group');
+    const setting = group.dataset.setting;
+    const value = btn.dataset.value;
+
+    // Update active state
+    group.querySelectorAll('.toggle-btn').forEach(b => {
+        b.classList.toggle('active', b === btn);
+    });
+
+    // Save setting
+    await settingsManager.set(setting, value);
+    settingsManager.apply();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Summarization Logic
+// ═══════════════════════════════════════════════════════════
+
+async function performSummarize() {
+    const source = appState.currentSource;
+    const length = settingsManager.get('length');
+    console.log(`[Summarize] Using length: ${length}, source: ${source}`);
+
+    setProcessing(true);
+
+    try {
+        switch (source) {
+            case 'current-tab':
+                await summarizeCurrentTab(length);
+                break;
+            case 'youtube':
+                await summarizeYouTube(length);
+                break;
+            case 'custom-url':
+                await summarizeCustomURL(length);
+                break;
+            case 'custom-script':
+                await summarizeCustomText(length);
+                break;
+        }
+    } catch (error) {
+        addMessage('error', `Summarization failed: ${error.message}`);
+    } finally {
+        setProcessing(false);
+    }
+}
+
+async function summarizeCurrentTab(length) {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+
+    if (!url) {
+        throw new Error('Could not get current tab URL');
+    }
+
+    addMessage('user', `Summarize: ${truncateUrl(url)}`);
+    addLoadingMessage();
+
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const endpoint = isYouTube ? '/summarize-youtube' : '/summarize-url';
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, length })
+    });
+
+    const data = await response.json();
+    removeLoadingMessage();
+
+    if (data.error) {
+        throw new Error(data.error);
+    }
+
+    addMessage('assistant', formatSummary(data.summary), { source: 'Current Tab' });
+    setContext(data.summary, url, isYouTube ? 'youtube' : 'webpage', data.original_content);
+}
+
+async function summarizeYouTube(length) {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url || '';
+
+    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
+        throw new Error('Please navigate to a YouTube video');
+    }
+
+    addMessage('user', `Summarize YouTube: ${truncateUrl(url)}`);
+    addLoadingMessage('Extracting transcript...');
+
+    const response = await fetch(`${API_BASE}/summarize-youtube`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, length })
+    });
+
+    const data = await response.json();
+    removeLoadingMessage();
+
+    if (data.error) {
+        throw new Error(data.error);
+    }
+
+    addMessage('assistant', formatSummary(data.summary), { source: 'YouTube' });
+    setContext(data.summary, url, 'youtube', data.original_content);
+}
+
+async function summarizeCustomURL(length) {
+    const url = elements.customUrl.value.trim();
+
+    if (!url) {
+        throw new Error('Please enter a URL');
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        throw new Error('URL must start with http:// or https://');
+    }
+
+    addMessage('user', `Summarize: ${truncateUrl(url)}`);
+    addLoadingMessage();
+
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const endpoint = isYouTube ? '/summarize-youtube' : '/summarize-url';
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, length })
+    });
+
+    const data = await response.json();
+    removeLoadingMessage();
+
+    if (data.error) {
+        throw new Error(data.error);
+    }
+
+    addMessage('assistant', formatSummary(data.summary), { source: 'URL' });
+    setContext(data.summary, url, isYouTube ? 'youtube' : 'webpage', data.original_content);
+
+    elements.customUrl.value = '';
+}
+
+async function summarizeCustomText(length) {
+    const text = elements.customText.value.trim();
+
+    if (!text || text.length < 20) {
+        throw new Error('Please enter at least 20 characters');
+    }
+
+    const preview = text.length > 80 ? text.substring(0, 80) + '...' : text;
+    addMessage('user', preview);
+    addLoadingMessage();
+
+    const response = await fetch(`${API_BASE}/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, length })
+    });
+
+    const data = await response.json();
+    removeLoadingMessage();
+
+    if (data.error) {
+        throw new Error(data.error);
+    }
+
+    addMessage('assistant', formatSummary(data.summary), { source: 'Custom Text' });
+    setContext(data.summary, null, 'text', data.original_content);
+
+    elements.customText.value = '';
+}
+
+function setContext(summary, url, type, originalContent = '') {
+    appState.currentContext = { summary, url, type, originalContent: originalContent || '' };
+    appState.followUpCount = 0;
+    enableFollowUps();
+    updateFollowUpCounter();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Follow-up Questions
+// ═══════════════════════════════════════════════════════════
+
+async function handleFollowUp() {
+    const question = elements.followupInput.value.trim();
+
+    if (!question) return;
+
+    if (appState.followUpCount >= MAX_FOLLOW_UPS) {
+        addMessage('error', 'Follow-up limit reached. Start a new summary.');
+        return;
+    }
+
+    if (!appState.currentContext) {
+        addMessage('error', 'Please summarize something first.');
+        return;
+    }
+
+    setProcessing(true);
+    addMessage('user', question);
+    addLoadingMessage('Thinking...');
+
+    try {
+        const history = appState.messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role, content: m.content }));
+
+        const response = await fetch(`${API_BASE}/follow-up`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question,
+                context: appState.currentContext.summary,
+                original_content: appState.currentContext.originalContent,
+                history
+            })
+        });
+
+        const data = await response.json();
+        removeLoadingMessage();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        appState.followUpCount++;
+        addMessage('assistant', formatSummary(data.answer), {
+            source: `Follow-up ${appState.followUpCount}/${MAX_FOLLOW_UPS}`
         });
 
         updateFollowUpCounter();
+        elements.followupInput.value = '';
+
+    } catch (error) {
+        removeLoadingMessage();
+        addMessage('error', `Follow-up failed: ${error.message}`);
+    } finally {
+        setProcessing(false);
+    }
+}
+
+function enableFollowUps() {
+    elements.followupInput.disabled = false;
+    elements.followupSendBtn.disabled = false;
+}
+
+function disableFollowUps() {
+    elements.followupInput.disabled = true;
+    elements.followupSendBtn.disabled = true;
+}
+
+function updateFollowUpCounter() {
+    const remaining = MAX_FOLLOW_UPS - appState.followUpCount;
+
+    if (!appState.currentContext) {
+        elements.followupCounter.textContent = '';
+        elements.followupCounter.className = 'followup-counter';
+        disableFollowUps();
+        return;
+    }
+
+    if (remaining > 0) {
+        elements.followupCounter.textContent = `${remaining} follow-up${remaining !== 1 ? 's' : ''} remaining`;
+        elements.followupCounter.className = remaining === 1 ? 'followup-counter warning' : 'followup-counter';
+    } else {
+        elements.followupCounter.textContent = 'Limit reached';
+        elements.followupCounter.className = 'followup-counter limit';
+        disableFollowUps();
     }
 }
 
@@ -103,492 +480,122 @@ function restoreUI() {
 // UI Helpers
 // ═══════════════════════════════════════════════════════════
 
-function setActiveAction(action) {
-    state.currentAction = action;
-    document.querySelectorAll('.action-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.action === action);
-    });
-}
-
-function showLoading(show) {
-    elements.loadingIndicator.classList.toggle('visible', show);
-    elements.emptyState.style.display = 'none';
-    elements.sendBtn.disabled = show;
-    elements.userInput.disabled = show;
-}
-
-function showSummary(heading, body, save = true) {
-    elements.emptyState.style.display = 'none';
-    elements.summarySection.classList.add('visible');
-
-    elements.summaryHeading.textContent = heading;
-    elements.summaryBody.innerHTML = formatSummaryBody(body);
-    elements.summaryBody.style.fontSize = state.fontSize + 'px';
-
-    // Reset follow-ups for new summary
-    if (save) {
-        state.heading = heading;
-        state.summary = body;
-        state.context = body;
-        state.followUpCount = 0;
-        state.followUps = [];
-        elements.followupSection.innerHTML = '';
-        saveState();
-    }
-
-    updateFollowUpCounter();
-    scrollToBottom();
-}
-
-function showTranscriptionBadge() {
-    // Add badge to indicate audio was transcribed
-    const badge = document.createElement('div');
-    badge.className = 'transcription-badge';
-    badge.innerHTML = '🎤 Transcribed from audio';
-
-    // Insert after summary heading
-    const meta = elements.summaryMeta;
-    if (meta) {
-        meta.appendChild(badge);
+function hideHomePage() {
+    if (elements.homePage) {
+        elements.homePage.classList.add('hidden');
     }
 }
 
-function formatSummaryBody(text) {
-    // Convert markdown to HTML
-    let html = text;
+function addMessage(role, content, metadata = {}) {
+    hideHomePage();
 
-    // Remove leading heading (since it's already displayed as the title)
-    // This handles #, ##, or ### at the start
-    html = html.replace(/^#{1,3}\s*.+?\n+/, '');
+    const message = document.createElement('div');
+    message.className = `message ${role}`;
 
-    // Convert remaining section headings to styled divs
-    html = html.replace(/^###\s*(.+)$/gm, '<div class="section-heading">$1</div>');
-    html = html.replace(/^##\s*(.+)$/gm, '<div class="section-heading">$1</div>');
+    const avatarContent = role === 'user' ? '👤' : role === 'assistant' ? '✨' : '⚠️';
+    const headerText = role === 'user' ? 'You' : role === 'assistant' ? 'Summary' : 'Error';
 
-    // Convert bold **text**
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-    // Convert italics *text*
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Convert bullet lists
-    html = html.replace(/^-\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>[\s\S]*?<\/li>)+/g, '<ul>$&</ul>');
-
-    // Convert numbered lists
-    html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
-
-    // Convert paragraphs (double newlines)
-    html = html.replace(/\n\n+/g, '</p><p>');
-
-    // Convert single newlines to breaks
-    html = html.replace(/\n/g, '<br>');
-
-    // Wrap in paragraph
-    html = '<p>' + html + '</p>';
-
-    // Clean up
-    html = html.replace(/<p><\/p>/g, '');
-    html = html.replace(/<p>\s*<\/p>/g, '');
-    html = html.replace(/<p><br>/g, '<p>');
-    html = html.replace(/<br><\/p>/g, '</p>');
-    html = html.replace(/<p>\s*<div/g, '<div');
-    html = html.replace(/<\/div>\s*<\/p>/g, '</div>');
-
-    return html;
-}
-
-function addFollowUpToUI(question, answer) {
-    const item = document.createElement('div');
-    item.className = 'followup-item';
-    item.innerHTML = `
-        <div class="followup-question">${escapeHtml(question)}</div>
-        <div class="followup-answer">${formatSummaryBody(answer)}</div>
-    `;
-    elements.followupSection.appendChild(item);
-    scrollToBottom();
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function updateFollowUpCounter() {
-    const remaining = MAX_FOLLOW_UPS - state.followUpCount;
-
-    if (!state.summary) {
-        elements.followUpCounter.textContent = '';
-        elements.followUpCounter.className = 'followup-counter';
-        elements.userInput.disabled = true;
-        elements.userInput.placeholder = 'Summarize something first...';
-        return;
+    let metaHTML = '';
+    if (metadata.source) {
+        metaHTML = `<div class="message-meta">${metadata.source}</div>`;
     }
 
-    elements.userInput.disabled = false;
-    elements.userInput.placeholder = 'Ask about this summary...';
+    message.innerHTML = `
+    <div class="message-header">
+      <div class="message-avatar">${avatarContent}</div>
+      <span>${headerText}</span>
+    </div>
+    <div class="message-content">
+      ${content}
+      ${metaHTML}
+    </div>
+  `;
 
-    if (remaining > 0) {
-        elements.followUpCounter.textContent = `${remaining} question${remaining !== 1 ? 's' : ''} remaining`;
-        elements.followUpCounter.className = remaining === 1 ? 'followup-counter warning' : 'followup-counter';
-    } else {
-        elements.followUpCounter.textContent = 'Question limit reached for this summary';
-        elements.followUpCounter.className = 'followup-counter limit';
-        elements.userInput.disabled = true;
-        elements.userInput.placeholder = 'Limit reached. Start a new summary.';
+    elements.contentArea.appendChild(message);
+    elements.contentArea.scrollTop = elements.contentArea.scrollHeight;
+
+    appState.messages.push({ role, content, metadata });
+}
+
+function addLoadingMessage(text = 'Summarizing...') {
+    hideHomePage();
+
+    const loading = document.createElement('div');
+    loading.className = 'message assistant';
+    loading.id = 'loadingMessage';
+    loading.innerHTML = `
+    <div class="message-header">
+      <div class="message-avatar">✨</div>
+      <span>AI</span>
+    </div>
+    <div class="message-content">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <span>${text}</span>
+      </div>
+    </div>
+  `;
+
+    elements.contentArea.appendChild(loading);
+    elements.contentArea.scrollTop = elements.contentArea.scrollHeight;
+}
+
+function removeLoadingMessage() {
+    const loading = document.getElementById('loadingMessage');
+    if (loading) loading.remove();
+}
+
+function setProcessing(isProcessing) {
+    appState.isProcessing = isProcessing;
+    elements.summarizeBtn.disabled = isProcessing;
+
+    if (!isProcessing && appState.currentContext) {
+        enableFollowUps();
+    } else if (isProcessing) {
+        disableFollowUps();
     }
 }
 
-function scrollToBottom() {
-    setTimeout(() => {
-        elements.contentArea.scrollTop = elements.contentArea.scrollHeight;
-    }, 100);
-}
-
-function clearAll() {
-    state = {
-        currentAction: null,
-        length: 'M',
-        fontSize: 16,
-        followUpCount: 0,
-        summary: null,
-        heading: null,
-        context: null,
-        followUps: []
-    };
-
-    elements.summarySection.classList.remove('visible');
-    elements.emptyState.style.display = 'flex';
-    elements.followupSection.innerHTML = '';
-    elements.summaryHeading.textContent = '';
-    elements.summaryBody.innerHTML = '';
-
-    document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('[data-length]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.length === 'M');
-    });
-
-    updateFollowUpCounter();
-    saveState();
-}
-
-// ═══════════════════════════════════════════════════════════
-// API Calls
-// ═══════════════════════════════════════════════════════════
-
-async function getCurrentUrl() {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tabs[0]?.url || '';
-}
-
-async function getCurrentPageTitle() {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tabs[0]?.title || 'Current Page';
-}
-
-async function callAPI(endpoint, payload) {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, length: state.length })
-    });
-
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `HTTP ${res.status}`);
-    }
-
-    return await res.json();
-}
-
-async function summarizePage() {
-    setActiveAction('page');
-    showLoading(true);
-
+function truncateUrl(url) {
     try {
-        const url = await getCurrentUrl();
-        const title = await getCurrentPageTitle();
-
-        if (!url) throw new Error('Could not get current page URL');
-
-        const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-        const endpoint = isYouTube ? '/summarize-youtube' : '/summarize-url';
-
-        const data = await callAPI(endpoint, { url });
-
-        showLoading(false);
-        showSummary(data.heading || title, data.summary);
-
-    } catch (error) {
-        showLoading(false);
-        showError(error.message);
-    }
-}
-
-async function summarizeUrl(url) {
-    setActiveAction('url');
-    showLoading(true);
-
-    try {
-        const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-        const endpoint = isYouTube ? '/summarize-youtube' : '/summarize-url';
-
-        const data = await callAPI(endpoint, { url });
-
-        showLoading(false);
-        showSummary(data.heading || 'Summary', data.summary);
-
-    } catch (error) {
-        showLoading(false);
-        showError(error.message);
-    }
-}
-
-async function summarizeYouTube() {
-    setActiveAction('youtube');
-
-    const url = await getCurrentUrl();
-    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
-        showError('Please navigate to a YouTube video first');
-        return;
-    }
-
-    showLoading(true);
-
-    try {
-        const title = await getCurrentPageTitle();
-        const data = await callAPI('/summarize-youtube', { url });
-        showLoading(false);
-        showSummary(data.heading || title, data.summary);
-
-        // Show transcription badge if Whisper was used
-        if (data.metadata?.transcription_method === 'whisper') {
-            showTranscriptionBadge();
+        const parsed = new URL(url);
+        let display = parsed.hostname.replace('www.', '');
+        if (parsed.pathname.length > 1) {
+            display += parsed.pathname.length > 30
+                ? parsed.pathname.substring(0, 30) + '...'
+                : parsed.pathname;
         }
-
-    } catch (error) {
-        showLoading(false);
-        showError(error.message);
+        return display;
+    } catch {
+        return url.length > 50 ? url.substring(0, 50) + '...' : url;
     }
 }
 
-async function summarizeText(text) {
-    setActiveAction('text');
-    showLoading(true);
+function formatSummary(text) {
+    if (!text) return '';
 
-    try {
-        const data = await callAPI('/summarize', { text });
-
-        showLoading(false);
-        showSummary(data.heading || 'Custom Text Summary', data.summary);
-
-    } catch (error) {
-        showLoading(false);
-        showError(error.message);
-    }
-}
-
-async function askFollowUp(question) {
-    if (state.followUpCount >= MAX_FOLLOW_UPS) {
-        showError('Follow-up limit reached');
-        return;
-    }
-
-    if (!state.context) {
-        showError('Please summarize something first');
-        return;
-    }
-
-    showLoading(true);
-
-    try {
-        const history = state.followUps.map(fu => [
-            { role: 'user', content: fu.question },
-            { role: 'assistant', content: fu.answer }
-        ]).flat();
-
-        const data = await callAPI('/follow-up', {
-            question,
-            context: state.context,
-            history
+    // Convert markdown-style formatting to HTML
+    return text
+        // Headers
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        // Bold and italic
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Lists
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+        // Paragraphs
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/^(.+)$/gm, (match) => {
+            if (match.startsWith('<')) return match;
+            return match;
         });
-
-        showLoading(false);
-
-        state.followUpCount++;
-        state.followUps.push({ question, answer: data.answer });
-
-        addFollowUpToUI(question, data.answer);
-        updateFollowUpCounter();
-        saveState();
-
-    } catch (error) {
-        showLoading(false);
-        showError(error.message);
-    }
-}
-
-function showError(message) {
-    elements.emptyState.style.display = 'none';
-    elements.summarySection.classList.add('visible');
-    elements.summaryHeading.textContent = 'Error';
-
-    // Format error message with better structure
-    let formattedError = escapeHtml(message);
-
-    // Highlight key terms for readability
-    formattedError = formattedError.replace(/(\d{3})/g, '<strong>$1</strong>');
-    formattedError = formattedError.replace(/(timeout|failed|error|forbidden|not found|connection)/gi, '<strong>$1</strong>');
-
-    elements.summaryBody.innerHTML = `
-        <div class="error-container">
-            <p class="error-message">${formattedError}</p>
-            <p class="error-hint">Try refreshing the page or checking the URL.</p>
-        </div>
-    `;
 }
 
 // ═══════════════════════════════════════════════════════════
-// Event Handlers
+// Start Application
 // ═══════════════════════════════════════════════════════════
 
-// Action buttons
-elements.btnPage.addEventListener('click', summarizePage);
-
-elements.btnUrl.addEventListener('click', () => {
-    elements.urlOverlay.classList.add('visible');
-    elements.urlInput.focus();
-});
-
-elements.btnYoutube.addEventListener('click', summarizeYouTube);
-
-elements.btnText.addEventListener('click', () => {
-    setActiveAction('text');
-    elements.userInput.placeholder = 'Paste text to summarize...';
-    elements.userInput.disabled = false;
-    elements.userInput.focus();
-});
-
-// URL Modal
-elements.urlCancel.addEventListener('click', () => {
-    elements.urlOverlay.classList.remove('visible');
-    elements.urlInput.value = '';
-});
-
-elements.urlSubmit.addEventListener('click', () => {
-    const url = elements.urlInput.value.trim();
-    if (url) {
-        elements.urlOverlay.classList.remove('visible');
-        elements.urlInput.value = '';
-        summarizeUrl(url);
-    }
-});
-
-elements.urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        elements.urlSubmit.click();
-    } else if (e.key === 'Escape') {
-        elements.urlCancel.click();
-    }
-});
-
-// Length selector
-document.querySelectorAll('[data-length]').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('[data-length]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.length = btn.dataset.length;
-        saveState();
-    });
-});
-
-// Font size controls
-elements.fontDecrease.addEventListener('click', () => {
-    if (state.fontSize > 12) {
-        state.fontSize -= 2;
-        elements.summaryBody.style.fontSize = state.fontSize + 'px';
-        saveState();
-    }
-});
-
-elements.fontIncrease.addEventListener('click', () => {
-    if (state.fontSize < 24) {
-        state.fontSize += 2;
-        elements.summaryBody.style.fontSize = state.fontSize + 'px';
-        saveState();
-    }
-});
-
-// Send button
-elements.sendBtn.addEventListener('click', async () => {
-    const input = elements.userInput.value.trim();
-    if (!input) return;
-
-    elements.userInput.value = '';
-
-    // If no summary yet and text action selected, summarize the text
-    if (!state.summary && state.currentAction === 'text') {
-        await summarizeText(input);
-    } else if (!state.summary) {
-        // Treat as text to summarize
-        await summarizeText(input);
-    } else {
-        // Treat as follow-up question
-        await askFollowUp(input);
-    }
-});
-
-elements.userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        elements.sendBtn.click();
-    }
-});
-
-// Auto-resize textarea
-elements.userInput.addEventListener('input', () => {
-    elements.userInput.style.height = '44px';
-    elements.userInput.style.height = Math.min(120, elements.userInput.scrollHeight) + 'px';
-});
-
-// Clear button
-elements.clearBtn.addEventListener('click', () => {
-    if (confirm('Clear everything and start fresh?')) {
-        clearAll();
-    }
-});
-
-// Export button
-elements.exportBtn.addEventListener('click', () => {
-    const exportData = {
-        timestamp: new Date().toISOString(),
-        heading: state.heading,
-        summary: state.summary,
-        followUps: state.followUps
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `summary-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-});
-
-// Jump to latest button
-elements.contentArea.addEventListener('scroll', () => {
-    const { scrollTop, scrollHeight, clientHeight } = elements.contentArea;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    elements.jumpBtn.classList.toggle('visible', !isNearBottom && state.summary);
-});
-
-elements.jumpBtn.addEventListener('click', scrollToBottom);
-
-// ═══════════════════════════════════════════════════════════
-// Initialization
-// ═══════════════════════════════════════════════════════════
-
-loadState();
-updateFollowUpCounter();
+init();
