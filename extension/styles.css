@@ -269,6 +269,25 @@ select {
   transform: rotate(45deg);
 }
 
+/* Delete Button */
+.delete-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  transition: all var(--transition-base);
+}
+
+.delete-btn:hover {
+  color: var(--error);
+  background: var(--bg-elevated);
+  transform: scale(1.05);
+}
+
 /* ═══════════════════════════════════════════════════════════
    Settings Panel (Compact, 25% height, slides from top)
    ═══════════════════════════════════════════════════════════ */
@@ -322,6 +341,41 @@ select {
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-base);
+}
+
+.setting-select option {
+  padding: 4px;
+}
+
+/* Color indicators */
+.setting-select option[value="slate"]::before {
+  content: "● ";
+  color: #516170;
+}
+
+.setting-select option[value="cedar"]::before {
+  content: "● ";
+  color: #c4622d;
+}
+
+.setting-select option[value="mint"]::before {
+  content: "● ";
+  color: #37a987;
+}
+
+.setting-select option[value="ocean"]::before {
+  content: "● ";
+  color: #1e88e5;
+}
+
+.setting-select option[value="ember"]::before {
+  content: "● ";
+  color: #d84315;
+}
+
+.setting-select option[value="iris"]::before {
+  content: "● ";
+  color: #5e35b1;
 }
 
 .setting-select:hover {
@@ -471,7 +525,7 @@ select {
 .home-icon {
   width: 96px;
   height: 96px;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   opacity: 0.8;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
 }
@@ -481,14 +535,14 @@ select {
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
   letter-spacing: -0.02em;
 }
 
 .home-description {
   color: var(--text-secondary);
   font-size: 14px;
-  margin-bottom: var(--space-xl);
+  margin-bottom: 0;
   line-height: 1.6;
 }
 
@@ -509,6 +563,44 @@ select {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   Jump to Latest Button
+   ═══════════════════════════════════════════════════════════ */
+
+.jump-to-latest {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-xs) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px var(--shadow);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.jump-to-latest:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
+.jump-to-latest.hidden {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
    Message Bubbles — Chat-Style Layout
    ═══════════════════════════════════════════════════════════ */
 
@@ -521,8 +613,15 @@ select {
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* User messages → right */
@@ -604,10 +703,10 @@ select {
 }
 
 .message.assistant .message-content {
-  background: rgba(16, 185, 129, 0.03);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
-  border-left: 2px solid rgba(16, 185, 129, 0.2);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--text-primary);
 }
 
@@ -631,8 +730,8 @@ select {
 }
 
 .message.assistant .message-source {
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  color: var(--success);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
 }
 
 /* Streaming cursor effect */
@@ -644,8 +743,16 @@ select {
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Markdown Rendering in Messages */
@@ -659,9 +766,17 @@ select {
   color: var(--text-primary);
 }
 
-.message-content h1 { font-size: 1.3em; }
-.message-content h2 { font-size: 1.15em; }
-.message-content h3 { font-size: 1.05em; }
+.message-content h1 {
+  font-size: 1.3em;
+}
+
+.message-content h2 {
+  font-size: 1.15em;
+}
+
+.message-content h3 {
+  font-size: 1.05em;
+}
 
 .message-content p {
   margin-bottom: var(--space-sm);
