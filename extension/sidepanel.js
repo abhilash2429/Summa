@@ -1,13 +1,9 @@
-// ═══════════════════════════════════════════════════════════
-// Main Application Logic
-// ═══════════════════════════════════════════════════════════
+
 
 const API_BASE = 'http://127.0.0.1:5000';
 const MAX_FOLLOW_UPS = 3;
 
-// ═══════════════════════════════════════════════════════════
-// State Management
-// ═══════════════════════════════════════════════════════════
+
 
 let appState = {
     currentSource: 'current-tab',
@@ -19,9 +15,7 @@ let appState = {
     settingsOpen: false
 };
 
-// ═══════════════════════════════════════════════════════════
-// DOM Elements
-// ═══════════════════════════════════════════════════════════
+
 
 const elements = {
     // Header controls
@@ -51,9 +45,7 @@ const elements = {
     colorSelect: document.getElementById('colorSelect')
 };
 
-// ═══════════════════════════════════════════════════════════
-// Initialization
-// ═══════════════════════════════════════════════════════════
+
 
 async function init() {
     // Load and apply settings
@@ -72,9 +64,7 @@ async function init() {
     console.log('Sum-it-up initialized');
 }
 
-// ═══════════════════════════════════════════════════════════
-// Settings UI Initialization
-// ═══════════════════════════════════════════════════════════
+
 
 function initializeSettingsUI() {
     const settings = settingsManager.settings;
@@ -95,9 +85,7 @@ function initializeSettingsUI() {
     });
 }
 
-// ═══════════════════════════════════════════════════════════
-// Event Listeners
-// ═══════════════════════════════════════════════════════════
+
 
 function setupEventListeners() {
     // Summarize button - direct click summarizes
@@ -164,7 +152,7 @@ function setupEventListeners() {
     });
 }
 
-// Removed - handleSummarizeClick no longer needed
+
 
 function toggleDropdown() {
     appState.dropdownOpen = !appState.dropdownOpen;
@@ -204,9 +192,7 @@ function updateDynamicInputArea() {
     });
 }
 
-// ═══════════════════════════════════════════════════════════
-// Settings Panel
-// ═══════════════════════════════════════════════════════════
+
 
 function toggleSettings() {
     appState.settingsOpen = !appState.settingsOpen;
@@ -235,9 +221,7 @@ async function handleToggleChange(e) {
     settingsManager.apply();
 }
 
-// ═══════════════════════════════════════════════════════════
-// Summarization Logic
-// ═══════════════════════════════════════════════════════════
+
 
 async function performSummarize() {
     const source = appState.currentSource;
@@ -410,9 +394,7 @@ function setContext(summary, url, type, originalContent = '', title = '') {
     updateFollowUpCounter();
 }
 
-// ═══════════════════════════════════════════════════════════
-// Follow-up Questions
-// ═══════════════════════════════════════════════════════════
+
 
 async function handleFollowUp() {
     const question = elements.followupInput.value.trim();
@@ -503,9 +485,7 @@ function updateFollowUpCounter() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
-// UI Helpers
-// ═══════════════════════════════════════════════════════════
+
 
 function hideHomePage() {
     if (elements.homePage) {
@@ -653,9 +633,7 @@ function formatSummary(text) {
         });
 }
 
-// ═══════════════════════════════════════════════════════════
-// Streaming Text Generation
-// ═══════════════════════════════════════════════════════════
+
 
 async function streamMessage(role, fullText, metadata = {}) {
     hideHomePage();
@@ -702,9 +680,7 @@ async function streamMessage(role, fullText, metadata = {}) {
     });
 }
 
-// ═══════════════════════════════════════════════════════════
-// Dynamic Header Title Management
-// ═══════════════════════════════════════════════════════════
+
 
 function updateHeaderTitle(title = null) {
     if (title) {
@@ -759,8 +735,6 @@ async function fetchPageTitle(url) {
     return extractTitleFromURL(url);
 }
 
-// ═══════════════════════════════════════════════════════════
-// Start Application
-// ═══════════════════════════════════════════════════════════
+
 
 init();
