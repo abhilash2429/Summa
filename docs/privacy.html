@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — SUM-IT-UP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div class="app-wrapper">
+        <div class="bg-glow"></div>
+
+        <div class="content-wrapper">
+            <nav>
+                <div class="container nav-wrapper">
+                    <a href="index.html" class="logo">SUM-IT-UP</a>
+                    <button class="theme-toggle" id="themeGroup" aria-label="Toggle theme">
+                        <div style="width:20px; height:20px; background:var(--primary); border-radius:50%;"></div>
+                    </button>
+                </div>
+            </nav>
+
+            <section style="min-height: 80vh; padding-top: 120px;">
+                <div class="container" style="max-width: 800px;">
+                    <a href="index.html" class="btn btn-outline" style="margin-bottom: 2rem;">← Back to Home</a>
+
+                    <h1 style="margin-bottom: 2rem;">Privacy Policy</h1>
+                    <p style="margin-bottom: 3rem;">Last updated: February 10, 2026</p>
+
+                    <div class="step-content">
+                        <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Overview</h2>
+                        <p>SUM-IT-UP is designed with a "Privacy First" architecture. We believe your reading habits and
+                            personal data should remain yours. Unlike cloud-based extensions, SUM-IT-UP processes data
+                            locally on your machine.</p>
+
+                        <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Data Collection</h2>
+                        <p><strong>We collect nothing.</strong></p>
+                        <ul
+                            style="list-style: disc; padding-left: 1.5rem; margin-top: 0.5rem; color: var(--text-muted);">
+                            <li>No analytics tracking</li>
+                            <li>No user accounts or logins</li>
+                            <li>No remote data logging</li>
+                        </ul>
+
+                        <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Data Processing</h2>
+                        <p>All summarization happens through a local Flask server running on your device (localhost).
+                            When you summarize a page:</p>
+                        <ul
+                            style="list-style: disc; padding-left: 1.5rem; margin-top: 0.5rem; color: var(--text-muted);">
+                            <li>The content is sent from your browser to your local server (127.0.0.1).</li>
+                            <li>Processing (cleaning, prompt building) happens locally.</li>
+                            <li>The final prompt is sent to the Google Gemini API (if configured) solely for generation.
+                            </li>
+                            <li>No content is stored on our servers because we don't have any servers.</li>
+                        </ul>
+
+                        <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Third-Party Services</h2>
+                        <p><strong>Google Gemini API:</strong> If you use the Gemini model, text snippets are sent to
+                            Google for processing. Please refer to Google's Privacy Policy regarding their API data
+                            usage.</p>
+                        <p style="margin-top: 0.5rem;"><strong>YouTube:</strong> When summarizing videos, the extension
+                            accesses the YouTube transcript or audio stream directly from your browser to your local
+                            server.</p>
+
+                        <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Contact</h2>
+                        <p>For any privacy concerns, open an issue on our GitHub repository.</p>
+                    </div>
+                </div>
+            </section>
+
+            <footer>
+                <div class="container">
+                    <div class="footer-links">
+                        <a href="https://github.com/abhilash2429/Summa">GitHub</a>
+                        <a href="./privacy.html">Privacy Policy</a>
+                        <a href="#">Report Issue</a>
+                    </div>
+                    <p class="copyright">&copy; 2026 SUM-IT-UP Project. MIT License.</p>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const themeGroup = document.getElementById('themeGroup');
+        const html = document.documentElement;
+
+        // Check system preference
+        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+            html.setAttribute('data-theme', 'light');
+        }
+
+        themeGroup.addEventListener('click', () => {
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+        });
+    </script>
+</body>
+
+</html>
