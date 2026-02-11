@@ -1,12 +1,10 @@
-// ═══════════════════════════════════════════════════════════
-// Settings Management Module
-// ═══════════════════════════════════════════════════════════
+
 
 const DEFAULT_SETTINGS = {
-    theme: 'dark',              // 'light' or 'dark'
-    length: 'medium',           // 'short', 'medium', 'long', 'xl'
-    fontSize: 'medium',         // 'small', 'medium', 'large'
-    colorPalette: 'ocean'       // 'slate', 'cedar', 'mint', 'ocean', 'ember', 'iris'
+    theme: 'dark',
+    length: 'medium',
+    fontSize: 'medium',
+    colorPalette: 'ocean'
 };
 
 // Color palettes extracted from reference image
@@ -55,7 +53,7 @@ class SettingsManager {
         this.listeners = [];
     }
 
-    // Load settings from chrome.storage
+
     async load() {
         try {
             const stored = await chrome.storage.local.get('settings');
@@ -78,7 +76,7 @@ class SettingsManager {
         return this.settings;
     }
 
-    // Save settings to chrome.storage
+
     async save() {
         try {
             await chrome.storage.local.set({ settings: this.settings });
@@ -88,19 +86,19 @@ class SettingsManager {
         }
     }
 
-    // Get a specific setting
+
     get(key) {
         return this.settings[key];
     }
 
-    // Set a specific setting
+
     async set(key, value) {
         console.log(`[Settings] Setting ${key} = ${value}`);
         this.settings[key] = value;
         await this.save();
     }
 
-    // Apply settings to the UI
+
     apply() {
         const root = document.documentElement;
 
@@ -127,17 +125,17 @@ class SettingsManager {
         console.log('[Settings] Applied:', this.settings);
     }
 
-    // Register listener for settings changes
+
     onChange(callback) {
         this.listeners.push(callback);
     }
 
-    // Notify all listeners
+
     notifyListeners() {
         this.listeners.forEach(cb => cb(this.settings));
     }
 
-    // Get all available color palettes
+
     getPalettes() {
         return COLOR_PALETTES;
     }
