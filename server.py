@@ -16,28 +16,28 @@ import google.generativeai as genai
 import torch
 import whisper
 
-# ─── Load environment variables ──────────────────────────────────
+
 load_dotenv()
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY not set in .env file")
 
-# ─── Configure Gemini ────────────────────────────────────────────
+
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash-lite')
 print("Gemini API configured (gemini-2.5-flash-lite)")
 
-# ─── Load Whisper for audio transcription ────────────────────────
+
 print("Loading Whisper model for audio transcription...")
 WHISPER_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_model = whisper.load_model("base", device=WHISPER_DEVICE)
 print(f"Whisper model loaded on: {WHISPER_DEVICE}")
 
-# ─── App and CORS ────────────────────────────────────────────────
+
 app = Flask(__name__)
 CORS(app)
 
-# ─── EXACT PROMPTS FROM TYPESCRIPT FILES ─────────────────────────
+
 
 SUMMARY_SYSTEM_PROMPT = """You are a precise summarization engine.
 Follow the user instructions in <instructions> exactly.
@@ -341,7 +341,7 @@ def build_summarization_prompt(content, content_type='text', length='M',
             summary_length=summary_length
         )
 
-# ─── Caching layer ───────────────────────────────────────────────
+
 _summary_cache = {}
 _transcription_cache = {}
 
@@ -357,14 +357,14 @@ def extract_heading_from_markdown(text):
         if line.startswith('# '):
             return line[2:].strip()
     
-    # No heading found - use first sentence as heading (cleaner than 8 random words)
+    
     first_line = lines[0] if lines else text[:100]
     # Remove any markdown formatting from first line
     first_line = re.sub(r'^#+\s*', '', first_line)
     first_line = re.sub(r'\*\*(.+?)\*\*', r'\1', first_line)
     first_line = first_line.strip()
     
-    # Truncate to reasonable length for a heading
+    
     if len(first_line) > 80:
         first_line = first_line[:77] + '...'
     
@@ -398,14 +398,14 @@ def gemini_summarize(text, length='M', content_type='text', url=None, title=None
     Generate summary using Gemini API with exact prompting structure.
     Returns structured data: {'summary': str, 'heading': str}
     """
-    # Check cache first
+    
     cache_key = get_summary_cache_key(text, length)
     cached = get_cached_summary(cache_key)
     if cached:
         print(f"Cache hit for summary (length={length})")
         return cached
     
-    # Build prompt using new structure
+    
     prompt = build_summarization_prompt(
         content=text,
         content_type=content_type,
@@ -417,7 +417,7 @@ def gemini_summarize(text, length='M', content_type='text', url=None, title=None
         truncated=truncated
     )
     
-    # Determine max tokens based on length
+    
     summary_length = LENGTH_MAP.get(length, length)
     if summary_length not in SUMMARY_LENGTH_SPECS:
         summary_length = 'medium'
@@ -435,7 +435,7 @@ def gemini_summarize(text, length='M', content_type='text', url=None, title=None
         )
         summary_text = response.text.strip()
         
-        # Extract heading
+        
         heading = extract_heading_from_markdown(summary_text)
         
         result = {
@@ -443,7 +443,7 @@ def gemini_summarize(text, length='M', content_type='text', url=None, title=None
             'heading': heading
         }
         
-        # Cache the result
+        
         cache_summary(cache_key, result)
         
         return result
@@ -599,7 +599,7 @@ def fetch_youtube_transcript_with_fallback(url):
         print(f"Failed to extract video info: {e}")
         raise Exception(f"Failed to get video information: {str(e)}")
     
-    # Check duration limit (30 minutes = 1800 seconds)
+    
     if info:
         duration = info.get('duration', 0)
         if duration > 1800:
@@ -617,9 +617,9 @@ def fetch_youtube_transcript_with_fallback(url):
     else:
         print("No English subtitles or automatic captions found in video info")
     
-    # If captions exist, extract them
+    
     if subtitle_source:
-        # Find a subtitle URL and fetch it
+        
         sub_url = None
         for sub in subtitle_source:
             ext = sub.get('ext')
@@ -634,22 +634,14 @@ def fetch_youtube_transcript_with_fallback(url):
                 sub_response = requests.get(sub_url, timeout=15)
                 sub_content = sub_response.text
                 
-                # Parse VTT/SRT content - extract just the text
+                
                 text_parts = []
                 lines = sub_content.split('\n')
                 for line in lines:
                     line = line.strip()
                     if not line:
                         continue
-                    # Skip timestamp lines, headers, and metadata
-                    if re.match(r'^\d{2}:\d{2}', line):
-                        continue
-                    if line.startswith('NOTE') or line == 'WEBVTT' or '-->' in line:
-                        continue
-                    if re.match(r'^\d+$', line):
-                        continue
-                    # Remove HTML tags
-                    line = re.sub(r'<[^>]+>', '', line)
+
                     if line:
                         text_parts.append(line)
                 
@@ -694,7 +686,7 @@ def fetch_youtube_transcript_with_fallback(url):
             os.remove(audio_path)
             print(f"Cleaned up temp audio file")
 
-# ─── API Endpoints ───────────────────────────────────────────────
+
 
 @app.route('/summarize', methods=['POST'])
 def summarize_text():
@@ -842,7 +834,7 @@ def follow_up_question():
         return jsonify({'error': 'No context available. Summarize something first.'}), 400
     
     try:
-        # Build conversation history
+
         history_text = ""
         if history:
             recent_history = history[-4:]  # Last 2 exchanges
@@ -850,10 +842,10 @@ def follow_up_question():
                 role_label = "User" if msg["role"] == "user" else "Assistant"
                 history_text += f"{role_label}: {msg['content']}\n\n"
         
-        # Build the source content section (truncate to avoid token limits)
+
         source_section = ""
         if original_content:
-            # Cap at ~12000 chars to stay within token limits
+
             truncated_content = original_content[:12000]
             was_truncated = len(original_content) > 12000
             source_section = f"""\n\nOriginal Source Content{' (truncated)' if was_truncated else ''}:
@@ -906,6 +898,6 @@ def health():
         'prompt_version': 'typescript-exact-match'
     })
 
-# ─── Run ──────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
