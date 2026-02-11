@@ -3,7 +3,7 @@
 **Turn noise into knowledge.**  
 A privacy-first Chrome extension that summarizes web pages, YouTube videos, and text using local AI models.
 
-![SUM-IT-UP Banner](landing-page/screenshots/hero.png)
+![SUM-IT-UP Banner](docs/screenshots/hero.png)
 
 ## Why SUM-IT-UP?
 
