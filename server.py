@@ -12,20 +12,67 @@ from flask_cors import CORS
 from bs4 import BeautifulSoup
 import yt_dlp
 from dotenv import load_dotenv
+
+from dotenv import load_dotenv
+
 import google.generativeai as genai
+import openai
+import anthropic
 import torch
 import whisper
 
 
 load_dotenv()
+load_dotenv()
+
+# Initialize LLM Clients
+LLM_CLIENTS = {}
+ACTIVE_PROVIDER = None
+
+# 1. Gemini
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY not set in .env file")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    LLM_CLIENTS['gemini'] = genai.GenerativeModel('gemini-2.5-flash-lite')
+    print("Gemini API configured (gemini-2.5-flash-lite)")
 
+# 2. OpenAI
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if OPENAI_API_KEY:
+    LLM_CLIENTS['openai'] = openai.OpenAI(api_key=OPENAI_API_KEY)
+    print("OpenAI API configured")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash-lite')
-print("Gemini API configured (gemini-2.5-flash-lite)")
+# 3. Anthropic (Claude)
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+if ANTHROPIC_API_KEY:
+    LLM_CLIENTS['claude'] = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    print("Anthropic API configured")
+
+# 4. Grok (xAI)
+XAI_API_KEY = os.getenv('XAI_API_KEY') or os.getenv('GROK_API_KEY')
+if XAI_API_KEY:
+    LLM_CLIENTS['grok'] = openai.OpenAI(
+        api_key=XAI_API_KEY, 
+        base_url="https://api.x.ai/v1"
+    )
+    print("Grok (xAI) API configured")
+
+# Determine Active Provider
+PREFERRED_PROVIDER = os.getenv('LLM_PROVIDER', '').lower()
+if PREFERRED_PROVIDER and PREFERRED_PROVIDER in LLM_CLIENTS:
+    ACTIVE_PROVIDER = PREFERRED_PROVIDER
+elif 'gemini' in LLM_CLIENTS:
+    ACTIVE_PROVIDER = 'gemini'
+elif 'openai' in LLM_CLIENTS:
+    ACTIVE_PROVIDER = 'openai'
+elif 'claude' in LLM_CLIENTS:
+    ACTIVE_PROVIDER = 'claude'
+elif 'grok' in LLM_CLIENTS:
+    ACTIVE_PROVIDER = 'grok'
+else:
+    print("WARNING: No LLM API keys found. Summarization will fail.")
+
+print(f"Active LLM Provider: {ACTIVE_PROVIDER}")
 
 
 print("Loading Whisper model for audio transcription...")
@@ -392,20 +439,79 @@ def get_cached_transcription(url):
     """Get cached transcription if exists."""
     return _transcription_cache.get(url)
 
-def gemini_summarize(text, length='M', content_type='text', url=None, title=None, 
-                     site_name=None, description=None, truncated=False):
+def _summarize_with_gemini(model, prompt, max_tokens):
+    """Summarize using Google Gemini"""
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            'temperature': 0.3,
+            'top_p': 0.9,
+            'top_k': 40,
+            'max_output_tokens': max_tokens,
+        }
+    )
+    return response.text.strip(), 'gemini-2.5-flash-lite'
+
+def _summarize_with_openai(client, prompt, max_tokens):
+    """Summarize using OpenAI GPT-4o-mini"""
+    model_name = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."}, # System prompt is minimal as instructions are in user prompt
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,
+        max_tokens=max_tokens
+    )
+    return response.choices[0].message.content.strip(), model_name
+
+def _summarize_with_claude(client, prompt, max_tokens):
+    """Summarize using Anthropic Claude 3 Haiku/Sonnet"""
+    model_name = os.getenv('ANTHROPIC_MODEL', 'claude-3-haiku-20240307')
+    response = client.messages.create(
+        model=model_name,
+        max_tokens=max_tokens,
+        temperature=0.3,
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.content[0].text.strip(), model_name
+
+def _summarize_with_grok(client, prompt, max_tokens):
+    """Summarize using xAI Grok"""
+    model_name = os.getenv('GROK_MODEL', 'grok-beta')
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,
+        max_tokens=max_tokens
+    )
+    return response.choices[0].message.content.strip(), model_name
+
+def generate_summary(text, length='M', content_type='text', url=None, title=None, 
+                     site_name=None, description=None, truncated=False, provider=None):
     """
-    Generate summary using Gemini API with exact prompting structure.
-    Returns structured data: {'summary': str, 'heading': str}
+    Generate summary using the active or requested LLM provider.
+    Returns structured data: {'summary': str, 'heading': str, 'model': str}
     """
     
-    cache_key = get_summary_cache_key(text, length)
+    # Determine which provider to use
+    selected_provider = provider or ACTIVE_PROVIDER
+    if not selected_provider or selected_provider not in LLM_CLIENTS:
+        raise ValueError(f"LLM provider '{selected_provider}' not available. Check API keys.")
+
+    cache_key = get_summary_cache_key(text, length) + f"_{selected_provider}"
     cached = get_cached_summary(cache_key)
     if cached:
-        print(f"Cache hit for summary (length={length})")
+        print(f"Cache hit for summary (length={length}, provider={selected_provider})")
         return cached
     
-    
+    # Build prompt
     prompt = build_summarization_prompt(
         content=text,
         content_type=content_type,
@@ -417,46 +523,52 @@ def gemini_summarize(text, length='M', content_type='text', url=None, title=None
         truncated=truncated
     )
     
-    
+    # Get max tokens based on length spec
     summary_length = LENGTH_MAP.get(length, length)
     if summary_length not in SUMMARY_LENGTH_SPECS:
         summary_length = 'medium'
     max_tokens = SUMMARY_LENGTH_SPECS[summary_length]['max_tokens']
     
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                'temperature': 0.3,
-                'top_p': 0.9,
-                'top_k': 40,
-                'max_output_tokens': max_tokens,
-            }
-        )
-        summary_text = response.text.strip()
+        client = LLM_CLIENTS[selected_provider]
+        summary_text = ""
+        model_name = ""
+
+        if selected_provider == 'gemini':
+            summary_text, model_name = _summarize_with_gemini(client, prompt, max_tokens)
+        elif selected_provider == 'openai':
+            summary_text, model_name = _summarize_with_openai(client, prompt, max_tokens)
+        elif selected_provider == 'claude':
+            summary_text, model_name = _summarize_with_claude(client, prompt, max_tokens)
+        elif selected_provider == 'grok':
+            summary_text, model_name = _summarize_with_grok(client, prompt, max_tokens)
         
-        
+        # Extract heading
         heading = extract_heading_from_markdown(summary_text)
         
         result = {
             'summary': summary_text,
-            'heading': heading
+            'heading': heading,
+            'model': model_name,
+            'provider': selected_provider
         }
         
-        
+        # Cache result
         cache_summary(cache_key, result)
         
         return result
         
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        print(f"{selected_provider} API error: {e}")
         raise
 
 def format_summary_response(structured_data):
     """Format the structured summary response."""
     return {
         'summary': structured_data['summary'],
-        'heading': structured_data['heading']
+        'heading': structured_data['heading'],
+        'provider': structured_data.get('provider', 'unknown'),
+        'model': structured_data.get('model', 'unknown')
     }
 
 def fetch_url_text(url):
@@ -697,7 +809,10 @@ def summarize_text():
     if not text or len(text.strip()) < 20:
         return jsonify({'error': 'Text must be at least 20 characters'}), 400
     try:
-        structured_data = gemini_summarize(text, length, content_type='text')
+        if not ACTIVE_PROVIDER:
+            return jsonify({'error': 'No LLM provider configured. Check .env file.'}), 503
+
+        structured_data = generate_summary(text, length, content_type='text')
         response = format_summary_response(structured_data)
         
         return jsonify({
@@ -707,8 +822,7 @@ def summarize_text():
                 'input_length': len(text),
                 'word_count': len(text.split()),
                 'length': length,
-                'timestamp': time.time(),
-                'model': 'gemini-2.5-flash-lite'
+                'timestamp': time.time()
             }
         })
     except Exception as e:
@@ -744,7 +858,7 @@ def summarize_url():
             site_name = None
             description = None
         
-        structured_data = gemini_summarize(
+        structured_data = generate_summary(
             text, length, content_type='webpage',
             url=url, title=title, site_name=site_name, description=description
         )
@@ -758,8 +872,7 @@ def summarize_url():
             'metadata': {
                 'source': url,
                 'length': length,
-                'timestamp': time.time(),
-                'model': 'gemini-2.5-flash-lite'
+                'timestamp': time.time()
             }
         })
     except Exception as e:
@@ -792,7 +905,7 @@ def summarize_youtube():
             title = None
             description = None
         
-        structured_data = gemini_summarize(
+        structured_data = generate_summary(
             transcript, length, content_type='youtube',
             url=url, title=title, site_name='YouTube', description=description
         )
