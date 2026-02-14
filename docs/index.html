@@ -27,8 +27,9 @@
             <nav>
                 <div class="container nav-wrapper">
                     <a href="#" class="logo">SUM-IT-UP</a>
-                    <button class="theme-toggle" id="themeGroup" aria-label="Toggle theme">
-                        <div style="width:20px; height:20px; background:var(--primary); border-radius:50%;"></div>
+                    <button class="theme-toggle" id="themeGroup" aria-label="Toggle theme" aria-pressed="false">
+                        <span class="theme-toggle-indicator" aria-hidden="true"></span>
+                        <span class="theme-toggle-label">Theme</span>
                     </button>
                 </div>
             </nav>
@@ -174,31 +175,22 @@
 
     <script>
         const themeGroup = document.getElementById('themeGroup');
-        const sunIcon = document.getElementById('sunIcon');
-        const moonIcon = document.getElementById('moonIcon');
         const html = document.documentElement;
+        const savedTheme = localStorage.getItem('sumitup-docs-theme');
 
-        // Check system preference
-        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-            html.setAttribute('data-theme', 'light');
-            updateIcons('light');
-        }
+        const preferredTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        setTheme(preferredTheme);
 
         themeGroup.addEventListener('click', () => {
             const currentTheme = html.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            updateIcons(newTheme);
+            setTheme(newTheme);
         });
 
-        function updateIcons(theme) {
-            if (theme === 'dark') {
-                sunIcon.style.display = 'none';
-                moonIcon.style.display = 'block';
-            } else {
-                sunIcon.style.display = 'block';
-                moonIcon.style.display = 'none';
-            }
+        function setTheme(theme) {
+            html.setAttribute('data-theme', theme);
+            themeGroup.setAttribute('aria-pressed', String(theme === 'dark'));
+            localStorage.setItem('sumitup-docs-theme', theme);
         }
     </script>
 </body>
