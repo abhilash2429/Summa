@@ -131,6 +131,3 @@ Click the **Settings (gear icon)** in the extension to:
 
 ---
 
-## License
-
-MIT License. Built by [Abhilash](https://github.com/abhilash2429).
